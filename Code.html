@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Super Smart AC Remote</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
+      transition: background 0.3s;
+    }
+    .remote {
+      width: 280px;
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      position: relative;
+      transition: background 0.3s, color 0.3s;
+    }
+    .remote.dark {
+      background: #333;
+      color: #eee;
+    }
+    .screen {
+      width: 100%;
+      height: 370px;
+      background: #222;
+      color: lime;
+      font-size: 12px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      padding: 5px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+      word-wrap: break-word;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      margin-bottom: 5px;
+    }
+    .clock {
+      font-weight: bold;
+    }
+    .battery {
+      width: 25px;
+      height: 12px;
+      border: 1px solid lime;
+      border-radius: 2px;
+      position: relative;
+    }
+    .battery::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      right: -5px;
+      width: 3px;
+      height: 6px;
+      background: lime;
+      border-radius: 1px;
+    }
+    .battery-level {
+      height: 100%;
+      background: lime;
+    }
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .button {
+      width: 60px;
+      height: 40px;
+      margin: 5px;
+      border: none;
+      border-radius: 8px;
+      background: #007bff;
+      color: white;
+      font-size: 10px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .button:hover {
+      transform: scale(1.05);
+      background: #0056b3;
+    }
+    .button.power { background: red; }
+    .button.darkmode { background: #555; }
+    select {
+      margin-bottom: 10px;
+      padding: 5px;
+      border-radius: 5px;
+      width: 100%;
+    }
+    .preset-group {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+    }
+    .preset {
+      background: green;
+      color: white;
+      padding: 5px;
+      font-size: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 30%;
+    }
+    @media (max-width: 400px) {
+      .button {
+        width: 45px;
+        height: 35px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="remote" id="remote">
+  <select id="languageSelector" onchange="changeLanguage()">
+    <option value="en">English</option>
+    <option value="es">Español</option>
+    <option value="fr">Français</option>
+  </select>
+
+  <div class="screen" id="screen">
+    <div class="top-bar">
+      <div class="clock" id="clock">00:00</div>
+      <div class="battery">
+        <div class="battery-level" id="batteryLevel" style="width: 100%;"></div>
+      </div>
+    </div>
+    <div id="screenContent">OFF</div>
+  </div>
+
+  <div class="button-group">
+    <button class="button power" onclick="togglePower()">Power</button>
+    <button class="button" onclick="changeTemperature(1)">Temp +</button>
+    <button class="button" onclick="changeTemperature(-1)">Temp -</button>
+    <button class="button" onclick="changeMode()">Mode</button>
+    <button class="button" onclick="changeFanSpeed()">Fan</button>
+    <button class="button" onclick="toggleSwing()">Swing</button>
+    <button class="button" onclick="toggleTimer()">Timer</button>
+    <button class="button" onclick="toggleSleep()">Sleep</button>
+    <button class="button" onclick="toggleTurbo()">Turbo</button>
+    <button class="button" onclick="toggleEco()">ECO</button>
+    <button class="button" onclick="toggleMute()">Mute</button>
+    <button class="button" onclick="toggleHumidity()">Humidity</button>
+    <button class="button" onclick="toggleIonizer()">Ionizer</button>
+    <button class="button" onclick="toggleVane()">Vane</button>
+    <button class="button" onclick="resetSettings()">Reset</button>
+    <button class="button darkmode" onclick="toggleDarkMode()">Dark Mode</button>
+  </div>
+
+  <div class="preset-group">
+    <div class="preset" onclick="setPreset('cool')">Cool 22°C</div>
+    <div class="preset" onclick="setPreset('sleep')">Sleep Mode</div>
+    <div class="preset" onclick="setPreset('eco')">Eco Cool</div>
+  </div>
+</div>
+
+<script>
+  let powerOn = false, temperature = 24, modeIndex = 0, fanIndex = 0;
+  let swingOn = false, timerOn = false, sleepOn = false, turboOn = false;
+  let ecoOn = false, muteOn = false, humidityOn = false, ionizerOn = false, vaneOn = false;
+  let currentLang = "en";
+  let batteryLevel = 100;
+  const minTemp = 16, maxTemp = 30;
+
+  const modes = {
+    en: ["Cool", "Heat", "Fan", "Auto", "Dry"],
+    es: ["Frío", "Calor", "Ventilador", "Auto", "Seco"],
+    fr: ["Froid", "Chaud", "Ventilateur", "Auto", "Sec"]
+  };
+
+  const fanSpeeds = {
+    en: ["Low", "Medium", "High", "Auto"],
+    es: ["Bajo", "Medio", "Alto", "Auto"],
+    fr: ["Bas", "Moyen", "Élevé", "Auto"]
+  };
+
+  const translations = {
+    en: {
+      powerOn: "Power On",
+      powerOff: "Power Off",
+      temperature: "Temperature set to",
+      modeSet: "Mode set to",
+      fanSpeed: "Fan speed:",
+      swingOn: "Swing On",
+      swingOff: "Swing Off",
+      timerOn: "Timer On",
+      timerOff: "Timer Off",
+      sleepOn: "Sleep mode Activated",
+      sleepOff: "Sleep mode Deactivated",
+      turboOn: "Turbo mode On",
+      turboOff: "Turbo mode Off",
+      ecoOn: "Eco mode On",
+      ecoOff: "Eco mode Off",
+      muteOn: "Mute On",
+      muteOff: "Mute Off",
+      humidityOn: "Humidity control On",
+      humidityOff: "Humidity control Off",
+      ionizerOn: "Ionizer On",
+      ionizerOff: "Ionizer Off",
+      vaneOn: "Vane On",
+      vaneOff: "Vane Off",
+      reset: "All settings reset to default",
+      darkOn: "Dark mode On",
+      darkOff: "Dark mode Off",
+      presetCool: "Preset Cool, 22 degrees",
+      presetSleep: "Preset Sleep mode activated",
+      presetEco: "Preset Eco Cool mode",
+      languageChanged: "Language changed to"
+    },
+    es: {
+      powerOn: "Encendido",
+      powerOff: "Apagado",
+      temperature: "Temperatura ajustada a",
+      modeSet: "Modo configurado a",
+      fanSpeed: "Velocidad del ventilador:",
+      swingOn: "Oscilación activada",
+      swingOff: "Oscilación desactivada",
+      timerOn: "Temporizador activado",
+      timerOff: "Temporizador desactivado",
+      sleepOn: "Modo de sueño activado",
+      sleepOff: "Modo de sueño desactivado",
+      turboOn: "Modo Turbo activado",
+      turboOff: "Modo Turbo desactivado",
+      ecoOn: "Modo ECO activado",
+      ecoOff: "Modo ECO desactivado",
+      muteOn: "Silencio activado",
+      muteOff: "Silencio desactivado",
+      humidityOn: "Control de humedad activado",
+      humidityOff: "Control de humedad desactivado",
+      ionizerOn: "Ionizador activado",
+      ionizerOff: "Ionizador desactivado",
+      vaneOn: "Persiana activada",
+      vaneOff: "Persiana desactivada",
+      reset: "Todos los ajustes reiniciados",
+      darkOn: "Modo oscuro activado",
+      darkOff: "Modo oscuro desactivado",
+      presetCool: "Preajuste de frío, 22 grados",
+      presetSleep: "Modo sueño preestablecido activado",
+      presetEco: "Modo Eco Cool preestablecido",
+      languageChanged: "Idioma cambiado a"
+    },
+    fr: {
+      powerOn: "Allumé",
+      powerOff: "Éteint",
+      temperature: "Température réglée à",
+      modeSet: "Mode réglé sur",
+      fanSpeed: "Vitesse du ventilateur :",
+      swingOn: "Balancement activé",
+      swingOff: "Balancement désactivé",
+      timerOn: "Minuterie activée",
+      timerOff: "Minuterie désactivée",
+      sleepOn: "Mode sommeil activé",
+      sleepOff: "Mode sommeil désactivé",
+      turboOn: "Mode Turbo activé",
+      turboOff: "Mode Turbo désactivé",
+      ecoOn: "Mode Éco activé",
+      ecoOff: "Mode Éco désactivé",
+      muteOn: "Silence activé",
+      muteOff: "Silence désactivé",
+      humidityOn: "Contrôle d'humidité activé",
+      humidityOff: "Contrôle d'humidité désactivé",
+      ionizerOn: "Ioniseur activé",
+      ionizerOff: "Ioniseur désactivé",
+      vaneOn: "Ailette activée",
+      vaneOff: "Ailette désactivée",
+      reset: "Paramètres réinitialisés",
+      darkOn: "Mode sombre activé",
+      darkOff: "Mode sombre désactivé",
+      presetCool: "Préréglage Cool, 22 degrés",
+      presetSleep: "Mode sommeil préréglé activé",
+      presetEco: "Mode Eco Cool préréglé",
+      languageChanged: "Langue changée en"
+    }
+  };
+
+  loadSettings();
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  function changeLanguage() {
+    currentLang = document.getElementById("languageSelector").value;
+    announce(`${translations[currentLang].languageChanged} ${document.querySelector("#languageSelector option:checked").text}`);
+    updateScreen();
+  }
+
+  function togglePower() {
+    powerOn = !powerOn;
+    announce(translations[currentLang][powerOn ? "powerOn" : "powerOff"]);
+    saveSettings();
+    updateScreen();
+  }
+
+  function changeTemperature(amount) {
+    if (powerOn) {
+      temperature = Math.max(minTemp, Math.min(maxTemp, temperature + amount));
+      announce(`${translations[currentLang].temperature} ${temperature}`);
+      saveSettings();
+      updateScreen();
+    }
+  }
+
+  function changeMode() {
+    if (powerOn) {
+      modeIndex = (modeIndex + 1) % modes[currentLang].length;
+      announce(`${translations[currentLang].modeSet} ${modes[currentLang][modeIndex]}`);
+      saveSettings();
+      updateScreen();
+    }
+  }
+
+  function changeFanSpeed() {
+    if (powerOn) {
+      fanIndex = (fanIndex + 1) % fanSpeeds[currentLang].length;
+      announce(`${translations[currentLang].fanSpeed} ${fanSpeeds[currentLang][fanIndex]}`);
+      saveSettings();
+      updateScreen();
+    }
+  }
+
+  function toggleSwing() { if (powerOn) { swingOn = !swingOn; announce(translations[currentLang][swingOn ? "swingOn" : "swingOff"]); saveSettings(); updateScreen(); }}
+  function toggleTimer() { if (powerOn) { timerOn = !timerOn; announce(translations[currentLang][timerOn ? "timerOn" : "timerOff"]); saveSettings(); updateScreen(); }}
+  function toggleSleep() { if (powerOn) { sleepOn = !sleepOn; announce(translations[currentLang][sleepOn ? "sleepOn" : "sleepOff"]); saveSettings(); updateScreen(); }}
+  function toggleTurbo() { if (powerOn) { turboOn = !turboOn; announce(translations[currentLang][turboOn ? "turboOn" : "turboOff"]); saveSettings(); updateScreen(); }}
+  function toggleEco() { if (powerOn) { ecoOn = !ecoOn; announce(translations[currentLang][ecoOn ? "ecoOn" : "ecoOff"]); saveSettings(); updateScreen(); }}
+  function toggleMute() { if (powerOn) { muteOn = !muteOn; announce(translations[currentLang][muteOn ? "muteOn" : "muteOff"]); saveSettings(); updateScreen(); }}
+  function toggleHumidity() { if (powerOn) { humidityOn = !humidityOn; announce(translations[currentLang][humidityOn ? "humidityOn" : "humidityOff"]); saveSettings(); updateScreen(); }}
+  function toggleIonizer() { if (powerOn) { ionizerOn = !ionizerOn; announce(translations[currentLang][ionizerOn ? "ionizerOn" : "ionizerOff"]); saveSettings(); updateScreen(); }}
+  function toggleVane() { if (powerOn) { vaneOn = !vaneOn; announce(translations[currentLang][vaneOn ? "vaneOn" : "vaneOff"]); saveSettings(); updateScreen(); }}
+
+  function resetSettings() {
+    if (confirm("Reset all settings?")) {
+      temperature = 24; modeIndex = 0; fanIndex = 0;
+      swingOn = timerOn = sleepOn = turboOn = ecoOn = muteOn = humidityOn = ionizerOn = vaneOn = false;
+      announce(translations[currentLang].reset);
+      saveSettings();
+      updateScreen();
+    }
+  }
+
+  function toggleDarkMode() {
+    const remote = document.getElementById("remote");
+    remote.classList.toggle("dark");
+    announce(translations[currentLang][remote.classList.contains("dark") ? "darkOn" : "darkOff"]);
+  }
+
+  function setPreset(type) {
+    if (type === "cool") { powerOn = true; temperature = 22; modeIndex = 0; announce(translations[currentLang].presetCool); }
+    if (type === "sleep") { powerOn = true; temperature = 24; sleepOn = true; announce(translations[currentLang].presetSleep); }
+    if (type === "eco") { powerOn = true; ecoOn = true; temperature = 26; announce(translations[currentLang].presetEco); }
+    saveSettings();
+    updateScreen();
+  }
+
+  function updateScreen() {
+    const screenContent = document.getElementById("screenContent");
+    const batteryBar = document.getElementById("batteryLevel");
+    if (powerOn) {
+      screenContent.innerHTML = `
+        Temp: ${temperature}°C <br>
+        Mode: ${modes[currentLang][modeIndex]} <br>
+        Fan: ${fanSpeeds[currentLang][fanIndex]} <br>
+        Swing: ${swingOn ? "On" : "Off"}<br>
+        Timer: ${timerOn ? "On" : "Off"}<br>
+        Sleep: ${sleepOn ? "On" : "Off"}<br>
+        Turbo: ${turboOn ? "On" : "Off"}<br>
+        ECO: ${ecoOn ? "On" : "Off"}<br>
+        Mute: ${muteOn ? "On" : "Off"}<br>
+        Humidity: ${humidityOn ? "On" : "Off"}<br>
+        Ionizer: ${ionizerOn ? "On" : "Off"}<br>
+        Vane: ${vaneOn ? "On" : "Off"}
+      `;
+    } else {
+      screenContent.innerText = "OFF";
+    }
+    batteryLevel -= 0.01;
+    batteryBar.style.width = `${Math.max(batteryLevel, 5)}%`;
+  }
+
+  function updateClock() {
+    const now = new Date();
+    document.getElementById("clock").innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function saveSettings() {
+    const settings = {
+      powerOn, temperature, modeIndex, fanIndex,
+      swingOn, timerOn, sleepOn, turboOn, ecoOn, muteOn, humidityOn, ionizerOn, vaneOn
+    };
+    localStorage.setItem('remoteSettings', JSON.stringify(settings));
+  }
+
+  function loadSettings() {
+    const settings = JSON.parse(localStorage.getItem('remoteSettings'));
+    if (settings) Object.assign(window, settings);
+    updateScreen();
+  }
+
+  function announce(message) {
+    window.speechSynthesis.cancel(); // Always cancel any ongoing speech first
+    const speech = new SpeechSynthesisUtterance(message);
+    speech.lang = currentLang === "es" ? "es-ES" : currentLang === "fr" ? "fr-FR" : "en-US";
+    window.speechSynthesis.speak(speech);
+  }
+</script>
+
+  
+
+</body>
+</html>
